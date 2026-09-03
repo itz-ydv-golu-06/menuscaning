@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#14171C" />
+<title>CardScan — Business Card Scanner</title>
+<meta name="description" content="Scan visiting cards, extract contact details automatically, and export them to Excel, PDF, Word or your phone book." />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="icons/icon-192.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<!-- ============ HOME ============ -->
+<main id="screen-home" class="screen active">
+  <header class="home-header">
+    <div class="brand">
+      <span class="brand-mark">⌗</span>
+      <h1>CardScan</h1>
+    </div>
+    <p class="tagline">Turn a stack of visiting cards into a clean contact list.</p>
+  </header>
+
+  <section class="hero-card" aria-hidden="true">
+    <div class="hero-card__rule"></div>
+    <div class="hero-card__row">
+      <div>
+        <div class="hero-card__label">Total cards</div>
+        <div class="hero-card__value" id="stat-total">0</div>
+      </div>
+      <div>
+        <div class="hero-card__label">Scanned today</div>
+        <div class="hero-card__value" id="stat-today">0</div>
+      </div>
+    </div>
+  </section>
+
+  <nav class="action-stack">
+    <button class="action-card action-card--primary" data-nav="scan">
+      <span class="action-card__icon">📷</span>
+      <span class="action-card__text">
+        <strong>Scan visiting card</strong>
+        <small>Single card, guided capture</small>
+      </span>
+    </button>
+    <button class="action-card" data-nav="scan" data-bulk="1">
+      <span class="action-card__icon">🗂️</span>
+      <span class="action-card__text">
+        <strong>Bulk scan</strong>
+        <small>Capture several cards in a row</small>
+      </span>
+    </button>
+    <button class="action-card" data-nav="cards">
+      <span class="action-card__icon">📇</span>
+      <span class="action-card__text">
+        <strong>My cards</strong>
+        <small id="cards-subtext">Nothing saved yet</small>
+      </span>
+    </button>
+    <button class="action-card" data-nav="export">
+      <span class="action-card__icon">📤</span>
+      <span class="action-card__text">
+        <strong>Export data</strong>
+        <small>Excel, CSV, PDF, Word, VCF</small>
+      </span>
+    </button>
+    <button class="action-card" data-nav="settings">
+      <span class="action-card__icon">⚙️</span>
+      <span class="action-card__text">
+        <strong>Settings</strong>
+        <small>Privacy &amp; storage</small>
+      </span>
+    </button>
+  </nav>
+
+  <section class="recent" id="recent-section" hidden>
+    <h2>Recent</h2>
+    <div id="recent-list" class="card-list"></div>
+  </section>
+</main>
+
+<!-- ============ CAMERA / SCAN ============ -->
+<main id="screen-scan" class="screen">
+  <header class="bar bar--dark">
+    <button class="icon-btn" data-nav="home" aria-label="Back">←</button>
+    <span class="bar__title" id="scan-title">Scan visiting card</span>
+    <button class="icon-btn" id="btn-flash" aria-label="Toggle flash">⚡</button>
+  </header>
+
+  <div class="camera-wrap">
+    <video id="camera-video" autoplay playsinline muted></video>
+    <canvas id="camera-canvas" hidden></canvas>
+    <div class="card-guide" aria-hidden="true"></div>
+    <div id="bulk-counter" class="bulk-counter" hidden>Card <span id="bulk-count">1</span></div>
+    <p id="camera-hint" class="camera-hint">Fill the outline with the card, then capture.</p>
+  </div>
+
+  <div class="camera-controls">
+    <button class="icon-btn icon-btn--ghost" id="btn-switch-cam" aria-label="Switch camera">🔄</button>
+    <button class="capture-btn" id="btn-capture" aria-label="Capture"></button>
+    <button class="icon-btn icon-btn--ghost" id="btn-pick-file" aria-label="Choose from gallery">🖼️</button>
+    <input type="file" id="file-input" accept="image/*" capture="environment" hidden />
+  </div>
+
+  <div id="bulk-actions" class="bulk-actions" hidden>
+    <button class="btn btn--secondary" id="btn-bulk-review">Review captured (<span id="bulk-review-count">0</span>)</button>
+  </div>
+</main>
+
+<!-- ============ PROCESSING ============ -->
+<main id="screen-processing" class="screen">
+  <div class="processing">
+    <div class="processing__card">
+      <div class="processing__spinner"></div>
+    </div>
+    <p id="processing-text">Reading the card…</p>
+  </div>
+</main>
+
+<!-- ============ REVIEW / EDIT ============ -->
+<main id="screen-review" class="screen">
+  <header class="bar">
+    <button class="icon-btn" data-nav="home" aria-label="Cancel">✕</button>
+    <span class="bar__title">Check the details</span>
+    <button class="icon-btn" id="btn-view-original" aria-label="View original photo">🖼️</button>
+  </header>
+
+  <form id="review-form" class="review-form">
+    <div id="review-fields"></div>
+    <div class="form-row">
+      <label for="f-notes">Notes</label>
+      <textarea id="f-notes" name="notes" rows="2" placeholder="Anything worth remembering about this contact"></textarea>
+    </div>
+    <label class="checkbox-row">
+      <input type="checkbox" id="f-favorite" />
+      <span>Mark as favorite</span>
+    </label>
+  </form>
+
+  <div class="review-actions">
+    <button class="btn btn--ghost" id="btn-discard">Discard</button>
+    <button class="btn btn--primary" id="btn-save-card">Save contact</button>
+  </div>
+</main>
+
+<!-- ============ MY CARDS ============ -->
+<main id="screen-cards" class="screen">
+  <header class="bar">
+    <button class="icon-btn" data-nav="home" aria-label="Back">←</button>
+    <span class="bar__title">My cards</span>
+    <button class="icon-btn" data-nav="scan" aria-label="Scan new">＋</button>
+  </header>
+
+  <div class="search-row">
+    <input type="search" id="search-input" placeholder="Search name, company, number…" />
+    <select id="sort-select">
+      <option value="date_desc">Newest first</option>
+      <option value="date_asc">Oldest first</option>
+      <option value="name">Name A–Z</option>
+      <option value="company">Company A–Z</option>
+    </select>
+  </div>
+
+  <div id="cards-list" class="card-list"></div>
+  <p id="cards-empty" class="empty-state" hidden>
+    No cards yet. Scan your first visiting card to start building your contact list.
+  </p>
+</main>
+
+<!-- ============ CONTACT DETAIL ============ -->
+<main id="screen-detail" class="screen">
+  <header class="bar">
+    <button class="icon-btn" data-nav="cards" aria-label="Back">←</button>
+    <span class="bar__title">Contact</span>
+    <button class="icon-btn" id="btn-edit-contact" aria-label="Edit">✎</button>
+  </header>
+  <div id="detail-body" class="detail-body"></div>
+</main>
+
+<!-- ============ EXPORT ============ -->
+<main id="screen-export" class="screen">
+  <header class="bar">
+    <button class="icon-btn" data-nav="home" aria-label="Back">←</button>
+    <span class="bar__title">Export data</span>
+    <span></span>
+  </header>
+
+  <div class="export-body">
+    <p class="export-count"><span id="export-selected-count">0</span> of <span id="export-total-count">0</span> cards selected</p>
+    <div class="export-select-row">
+      <button class="link-btn" id="btn-select-all">Select all</button>
+      <button class="link-btn" id="btn-select-none">Select none</button>
+    </div>
+    <div id="export-list" class="card-list export-list"></div>
+
+    <div class="export-formats">
+      <button class="format-btn" data-format="xlsx"><strong>Excel</strong><small>.xlsx</small></button>
+      <button class="format-btn" data-format="csv"><strong>CSV</strong><small>.csv</small></button>
+      <button class="format-btn" data-format="pdf"><strong>PDF</strong><small>.pdf</small></button>
+      <button class="format-btn" data-format="doc"><strong>Word</strong><small>.doc</small></button>
+      <button class="format-btn" data-format="vcf"><strong>Contacts</strong><small>.vcf</small></button>
+    </div>
+  </div>
+</main>
+
+<!-- ============ SETTINGS ============ -->
+<main id="screen-settings" class="screen">
+  <header class="bar">
+    <button class="icon-btn" data-nav="home" aria-label="Back">←</button>
+    <span class="bar__title">Settings</span>
+    <span></span>
+  </header>
+
+  <div class="settings-body">
+    <section class="settings-block">
+      <h2>Privacy</h2>
+      <p>Everything CardScan reads stays on this device. Card photos and extracted text are stored locally in your browser's storage — nothing is uploaded to a server. Text recognition (OCR) also runs on-device, in the background, the first time you use it it downloads a small language file over the network.</p>
+    </section>
+    <section class="settings-block">
+      <h2>Storage used</h2>
+      <p id="storage-used">Calculating…</p>
+    </section>
+    <section class="settings-block">
+      <h2>Danger zone</h2>
+      <button class="btn btn--danger" id="btn-clear-all">Delete all data</button>
+    </section>
+    <p class="version-tag">CardScan · v1.0</p>
+  </div>
+</main>
+
+<!-- Templates -->
+<template id="tpl-card-row">
+  <button class="card-row" type="button">
+    <div class="card-row__thumb"></div>
+    <div class="card-row__info">
+      <strong class="card-row__name"></strong>
+      <span class="card-row__company"></span>
+      <span class="card-row__meta"></span>
+    </div>
+    <span class="card-row__fav" hidden>★</span>
+  </button>
+</template>
+
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/parser.js"></script>
+<script src="js/camera.js"></script>
+<script src="js/ocr.js"></script>
+<script src="js/export.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

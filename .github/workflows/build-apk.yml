@@ -1,0 +1,68 @@
+name: Build Android APK
+
+# Turns the CardScan PWA into an installable Android APK using Google's
+# Bubblewrap CLI (Trusted Web Activity wrapper). Run it manually from the
+# Actions tab once the site is live on GitHub Pages.
+#
+# Before running:
+#  1. Enable GitHub Pages for this repo (Settings → Pages → deploy from
+#     the main branch, root folder).
+#  2. Update PWA_URL below to your Pages URL, e.g.
+#     https://itz-ydv-golu-06.github.io/menuscaning/
+#
+# The output APK is unsigned by default. To publish to the Play Store you
+# need a signed release build — Bubblewrap can generate a signing key for
+# you the first time you run `bubblewrap init` locally, or you can add
+# signing secrets to this workflow later.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'manifest.json'
+      - '.github/workflows/build-apk.yml'
+
+env:
+  PWA_URL: https://itz-ydv-golu-06.github.io/menuscaning/
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Bubblewrap CLI
+        run: npm install -g @bubblewrap/cli
+
+      - name: Generate Android project from the PWA manifest
+        run: |
+          bubblewrap init --manifest "${PWA_URL}manifest.json" --directory ./twa-project --skipPwaValidation <<'EOF'
+
+
+          y
+          EOF
+        continue-on-error: true
+
+      - name: Build APK
+        working-directory: ./twa-project
+        run: bubblewrap build --skipPwaValidation
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cardscan-apk
+          path: |
+            twa-project/app-release-unsigned.apk
+            twa-project/app-release-signed.apk
